@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+  </head>
+  <body>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+      import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDrJXY1IdfSYPTBQa8uffHh_7kyqBW9tiw",
+        authDomain: "daniel-onpe.firebaseapp.com",
+        projectId: "daniel-onpe",
+        storageBucket: "daniel-onpe.firebasestorage.app",
+        messagingSenderId: "572748032570",
+        appId: "1:572748032570:web:72fd6769ba14a341bd6303"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const baseUrl = 'http://localhost/onpe_sweb_php'; 
+
+    const setParticipacionNacional = async () => {
+        try {
+            const response = await fetch(`${baseUrl}/participacion/Nacional`);
+            const result = await response.json();
+            
+            if (result.success) {
+            result.data.forEach(registro => {
+                addDoc(collection(db, 'participacionNA'), registro);
+            });
+            console.log("Participación Nacional cargada exitosamente.");
+            }
+        } catch (error) {
+            console.error("Error al cargar Participación Nacional:", error);
+        }
+    }
+
+    const setParticipacionExtranjero = async () => {
+        try {
+            const response = await fetch(`${baseUrl}/participacion/Extranjero`);
+            const result = await response.json();
+            
+            if (result.success) {
+            result.data.forEach(registro => {
+                addDoc(collection(db, 'participacionEX'), registro);
+            });
+            console.log("Participación extranjera cargada exitosamente.");
+            }
+        } catch (error) {
+            console.error("Error al cargar Participación extranjera:", error);
+        }
+    }
+
+    const setParticipacionProvincia = async (id) =>{
+        try {
+            const res = await fetch(`${baseUrl}/participacion/${id}`);
+            const departamentos = await res.json();
+            departamentos.data.forEach(async departamento => {
+                
+                departamento.ID = id;
+                const resProv = await fetch(`${baseUrl}/participacion/${id}/${departamento.DPD}`);
+                const provincias = await resProv.json();
+                
+                provincias.data.forEach(provincia => {
+                    provincia.Departamento = departamento.DPD;
+                    addDoc(collection(db, 'participacionPROV'), provincia);
+                });
+            });
+        } catch (error) {
+            console.error(`Error al cargar Participación por provincia para ${id}:`, error);
+        }
+    }
+
+    
+    //setParticipacionProvincia("Nacional");
+    //setParticipacionProvincia("Extranjero");
+    //setParticipacionNacional();
+    //setParticipacionExtranjero();
+    </script>
+  </body>
+</html>
