@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+  </head>
+  <body>
+    <h1>Subiendo datos a Firebase</h1>
+    <p>Presione F12 para ver la consola</p>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+      import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDrJXY1IdfSYPTBQa8uffHh_7kyqBW9tiw",
+        authDomain: "daniel-onpe.firebaseapp.com",
+        projectId: "daniel-onpe",
+        storageBucket: "daniel-onpe.firebasestorage.app",
+        messagingSenderId: "572748032570",
+        appId: "1:572748032570:web:72fd6769ba14a341bd6303"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const baseUrl = 'http://localhost/onpe_sweb_php'; 
+
+    const setParticipacionNacional = async () => {
+        try {
+            const response = await fetch(`${baseUrl}/participacion/Nacional`);
+            const result = await response.json();
+            
+            if (result.success) {
+            result.data.forEach(registro => {
+                addDoc(collection(db, 'participacionNA'), registro);
+            });
+            console.log("Participación Nacional cargada exitosamente.");
+            }
+        } catch (error) {
+            console.error("Error al cargar Participación Nacional:", error);
+        }
+    }
+
+    const setParticipacionExtranjero = async () => {
+        try {
+            const response = await fetch(`${baseUrl}/participacion/Extranjero`);
+            const result = await response.json();
+            
+            if (result.success) {
+            result.data.forEach(registro => {
+                addDoc(collection(db, 'participacionEX'), registro);
+            });
+            console.log("Participación extranjera cargada exitosamente.");
+            }
+        } catch (error) {
+            console.error("Error al cargar Participación extranjera:", error);
+        }
+    }
+
+    const setParticipacionProvincia = async (id) => {
+        try {
+            //Cargar primero los departamentos para el ámbito dado (Nacional o Extranjero)
+            const res = await fetch(`${baseUrl}/participacion/${id}`);
+            const departamentos = await res.json();
+            if (!departamentos.success || !departamentos.data) return;
+
+            //Recorrer cada departamento y cargar sus provincias, para luego subirlas a Firebase
+            for (const departamento of departamentos.data) {
+                const depEnc = encodeURIComponent(departamento.DPD);
+                const resProv = await fetch(`${baseUrl}/participacion/${id}/${depEnc}`);
+                const provincias = await resProv.json();
+                //Si la respuesta no es exitosa o no tiene datos, saltamos al siguiente departamento
+                if (!provincias.success || !provincias.data) continue;
+                const listaProvincias = Array.isArray(provincias.data) ? provincias.data : [provincias.data];
+                const promesasDeSubida = listaProvincias.map(provincia => {
+                    provincia.Ambito = id;
+                    provincia.Departamento = departamento.DPD;
+                    
+                    return addDoc(collection(db, 'participacionPROV'), provincia);
+                });
+
+                await Promise.all(promesasDeSubida);
+                console.log(`Las provincias ${provincia.DPD} han sido cargados.`);
+            }
+            console.log(`Participación por provincia para ${id} cargada exitosamente.`);
+        } catch (error) {
+            console.error(`Error al cargar Participación por provincia para ${id}:`, error);
+        }
+    }
+
+    const setParticipacionDistrito = async (id) =>{
+        try {
+            const res = await fetch(`${baseUrl}/participacion/${id}`);
+            const departamentos = await res.json();
+
+            if (!departamentos.success || !departamentos.data) return;
+
+            for (const departamento of departamentos.data) {
+                //encodeURIComponent para manejar caracteres especiales en el nombre del departamento
+                const depEnc = encodeURIComponent(departamento.DPD);
+                const resProv = await fetch(`${baseUrl}/participacion/${id}/${depEnc}`);
+                const provincias = await resProv.json();
+                
+                if (!provincias.success || !provincias.data) continue;
+
+                //asegurar que provincias.data sea un array, si no lo es, convertirlo en uno
+                const listaProvincias = Array.isArray(provincias.data) ? provincias.data : [provincias.data];
+                
+                for (const provincia of listaProvincias) {
+                    const provEnc = encodeURIComponent(provincia.DPD);
+                    const resDist = await fetch(`${baseUrl}/participacion/${id}/${depEnc}/${provEnc}`);
+                    const distritos = await resDist.json();
+                    
+                    if (!distritos.success || !distritos.data) continue;
+                    const listaDistritos = Array.isArray(distritos.data) ? distritos.data : [distritos.data];
+                    //En lugar de usar un for o forEach, creamos un arreglo de promesas
+                    const promesasDeSubida = listaDistritos.map(distrito => {
+                        distrito.Ambito = id;
+                        distrito.Departamento = departamento.DPD;
+                        distrito.Provincia = provincia.DPD;
+                        
+                        //Retornamos la promesa (pero aún no esperamos a que termine)
+                        return addDoc(collection(db, 'participacionDIST'), distrito);
+                        console.log("El distrito " + distrito.DPD + " ha sido cargado.");
+                    });
+
+                    //Lanzamos todas las subidas de esta provincia en paralelo y esperamos a que el lote termine
+                    await Promise.all(promesasDeSubida);
+                    console.log(`Los distritos de la provincia ${provincia.DPD} han sido cargados.`);
+                }
+            };
+            console.log(`Participación por distrito para ${id} cargada exitosamente.`);
+        } catch (error) {
+            console.error(`Error al cargar Participación por distrito para ${id}:`, error);
+        }
+    }
+
+    //Script para subir los locales de votacion
+    const setLocalesVotacion = async (id) => {
+        try {
+            const resDep = await fetch(`${baseUrl}/actas/ubigeo/${id}`);
+            const departamentos = await resDep.json();
+            if(!departamentos.success || !departamentos.data) return;
+            console.log(`Cargando locales de votación para ${id}...`);
+
+            for(const departamento of departamentos.data){
+                const depEnc = encodeURIComponent(departamento.Detalle);
+                const resProv = await fetch(`${baseUrl}/actas/ubigeo/${id}/${depEnc}`);
+                const provincias = await resProv.json();
+                if(!provincias.success || !provincias.data) continue;
+                const listaProvincias = Array.isArray(provincias.data) ? provincias.data : [provincias.data];
+                console.log(`Cargando provincias del departamento ${departamento.Detalle}...`);
+
+                for(const provincia of listaProvincias){
+                    const provEnc = encodeURIComponent(provincia.Detalle);
+                    const resDist = await fetch(`${baseUrl}/actas/ubigeo/${id}/${depEnc}/${provEnc}`);
+                    const distritos = await resDist.json();
+                    if(!distritos.success || !distritos.data) continue;
+                    const listaDistritos = Array.isArray(distritos.data) ? distritos.data : [distritos.data];
+                    console.log(`Cargando distritos del departamento ${departamento.Detalle}...`);
+
+                    for(const distrito of listaDistritos){
+                        const nombreLimpio = distrito.Detalle.replace(/\//g, "-");
+                        const distEnc = encodeURIComponent(nombreLimpio);
+                        const resLoc = await fetch(`${baseUrl}/actas/ubigeo/${id}/${depEnc}/${provEnc}/${distEnc}`);
+                        const locales = await resLoc.json();
+                        if(locales.success || locales.data) {
+                            console.log(`Cargando locales de votación del distrito ${distrito.Detalle}...`);
+                            const listaLocales = Array.isArray(locales.data) ? locales.data : [locales.data];
+                            const promesasDeSubida = listaLocales.map(local => {
+                                local.Ambito = id;
+                                local.Departamento = departamento.Detalle;
+                                local.Provincia = provincia.Detalle;
+                                local.Distrito = distrito.Detalle;
+                                let bd = id === "Peru" ? "localesVotacionNA" : "localesVotacionEX";
+                                return addDoc(collection(db, bd), local);
+                            });
+                            await Promise.all(promesasDeSubida);
+                            console.log(`Los locales de votación del distrito ${distrito.Detalle} han sido cargados.`);
+                        }
+                    }
+                }
+            }
+            console.log(`Locales de votación para ${id} cargados exitosamente.`);
+        } catch (error) {
+            console.error(`Error al cargar locales de votación para ${id}:`, error);
+        }
+    }
+
+    //Funcion para subir las mesas y actas
+    const setMesasYActas = async (id, region) => {
+        try{
+            //Definir la colección correcta según el ámbito (Nacional o Extranjero)
+            const Coleccion = id === "Peru" ? "localesVotacionNA" : "localesVotacionEX";
+            const qlocales = query(collection(db, Coleccion), where("Ambito", "==", id), where("Departamento", "==", region));
+            const snapLocales = await getDocs(qlocales);
+            //Mapear los datos de los locales a un arreglo simple
+            const locales = snapLocales.docs.map(doc => doc.data());
+            //Si no se encontraron locales, mostrar una advertencia y salir de la función
+            if(locales.length === 0) {
+                console.warn(`No se encontraron locales de votación para ${id} en la región ${region}.`);
+                return;
+            }
+
+            for(const local of locales){
+                //Encoding para construir las URLs de las APIs de mesas y actas con caracteres especiales
+                const depEnc = encodeURIComponent(local.Departamento.replace(/\//g, "-"));
+                const provEnc = encodeURIComponent(local.Provincia.replace(/\//g, "-"));
+                const distEnc = encodeURIComponent(local.Distrito.replace(/\//g, "-"));
+                const locEnc = encodeURIComponent(local.RazonSocial.replace(/\//g, "-"));
+
+                const resMesas = await fetch(`${baseUrl}/actas/ubigeo/${id}/${depEnc}/${provEnc}/${distEnc}/${locEnc}`);
+                const mesas = await resMesas.json();
+                //Si la respuesta de mesas es exitosa y tiene datos, procedemos a subir las mesas y sus actas correspondientes
+                if(mesas.success && mesas.data){
+                    const listaMesas = Array.isArray(mesas.data) ? mesas.data : [mesas.data];
+                    const promesasMesas = listaMesas.map(async (mesa) => {
+                        const idMesa = mesa.idGrupoVotacion;
+                        const resActas = await fetch(`${baseUrl}/actas/ubigeo/${id}/${depEnc}/${provEnc}/${distEnc}/${locEnc}/${idMesa}`);
+                        const actas = await resActas.json();
+                        console.log(`Cargando actas para la mesa ${idMesa} en el local ${local.RazonSocial}...`);
+                        await addDoc(collection(db, 'mesas'),{
+                            ...mesa,
+                            idLocalVotacion: local.idLocalVotacion,
+                            departamento: region,
+                            Ambito: id
+                        });
+
+                        //Si la respuesta de las actas es exitosa, subir las actas
+                        if (actas.success && actas.data) {
+                            await addDoc(collection(db, 'actas'),{
+                                ...actas.data,
+                                idGrupoVotacion: idMesa,
+                                departamento: region,
+                            });
+                        }
+                    });
+
+                    await Promise.all(promesasMesas);
+                    console.log(`Mesas y actas para ${id} en la región ${region} han sido cargados.`);
+                }
+            }
+            console.log(`Proceso de carga de mesas y actas para ${id} en la región ${region} finalizado.`);
+        }catch(error){
+            console.error(`Error al cargar mesas y actas para ${id} en la región ${region}:`, error);
+        }
+    }
+
+    //setMesasYActas("Peru", "AMAZONAS");
+    //setMesasYActas("Extranjero", "AMERICA");
+    //setLocalesVotacion("Peru");
+    //setLocalesVotacion("Extranjero");
+    //setParticipacionDistrito("Nacional");
+    //setParticipacionDistrito("Extranjero");
+    //setParticipacionProvincia("Nacional");
+    //setParticipacionProvincia("Extranjero");
+    //setParticipacionNacional();
+    //setParticipacionExtranjero();
+    </script>
+  </body>
+</html>
+
+
+

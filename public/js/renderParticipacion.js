@@ -3,6 +3,7 @@ import { onpeController } from "./connection.js";
 //DOM
 document.addEventListener('DOMContentLoaded', async () =>{
     const contenido = document.getElementById('resultados')
+    
     //url para obtener el id del ámbito (Nacional o Extranjero)
     const url = new URLSearchParams(window.location.search);
     const id = url.get("id");
@@ -25,15 +26,15 @@ document.addEventListener('DOMContentLoaded', async () =>{
         switch(nivel) {
             case "DEP":
                 titulo = id === "1" ? "DEPARTAMENTO" : "CONTINENTE";
-                participaciones = await onpeController(nivel, id);
+                participaciones = await onpeController("PARTICIPACION", nivel, { id }); // Enviamos id en el objeto
                 break;
             case "PROV":
                 titulo = id === "1" ? "PROVINCIA" : "PAÍS";
-                participaciones = await onpeController(nivel, id, dep);
+                participaciones = await onpeController("PARTICIPACION", nivel, { id, dep }); // Enviamos id y dep
                 break;
             case "DIST":
                 titulo = id === "1" ? "DISTRITO" : "CIUDAD";
-                participaciones = await onpeController(nivel, id, dep, prov);
+                participaciones = await onpeController("PARTICIPACION", nivel, { id, dep, prov }); // Enviamos todo
                 break;
         }
 
