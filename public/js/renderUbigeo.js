@@ -9,15 +9,20 @@ document.addEventListener('DOMContentLoaded', async () =>{
     const divActas = document.getElementById('divDetalle');
 
     selAmbito.addEventListener('change', async() => {
-        const ambito = selAmbito.value === "P" ? "Peru" : "Extranjero";
+        const esPeru = selAmbito.value === "P";
+        const ambito = esPeru ? "Peru" : "Extranjero";
+        //Cambiar texto del departamento segun el ambito
+        document.getElementById('lblDepartamento').textContent = esPeru ? "Departamento:" : "Continente:";
+        document.getElementById('lblProvincia').textContent    = esPeru ? "Provincia:" : "Pais:";
+        document.getElementById('lblDistrito').textContent     = esPeru ? "Distrito:" : "Ciudad:";
 
         //Limpiar selects y divs
         resetSelect(selDep, "--SELECCIONE--");
         resetSelect(selProv, "--SELECCIONE--");
         resetSelect(selDist, "--SELECCIONE--");
 
-        const departmanetos = await onpeController("ACTAS", "DEP", {ambito});
-        llenarSelect(selDep, departmanetos, "Departamento");
+        const departamentos = await onpeController("ACTAS", "DEP", {ambito});
+        llenarSelect(selDep, departamentos, "Departamento");
     });
 
     selDep.addEventListener('change', async() => {
